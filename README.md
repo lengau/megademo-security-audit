@@ -1,6 +1,35 @@
 # megademo.ai Security Audit
 
+![Scope](https://img.shields.io/badge/scope-authenticated%20pen--test%20%2B%20source%20review-0ea5e9?style=for-the-badge)
+![Findings](https://img.shields.io/badge/findings-4%20validated-111827?style=for-the-badge)
+![High](https://img.shields.io/badge/high-1-dc2626?style=for-the-badge)
+![Medium](https://img.shields.io/badge/medium-2-f59e0b?style=for-the-badge)
+![Low](https://img.shields.io/badge/low-1-16a34a?style=for-the-badge)
+![Status](https://img.shields.io/badge/disclosure-responsible-7c3aed?style=for-the-badge)
+
+> 🚨 **From a normal user account to full project takeover:** this assessment identified **4 verified security findings** in megademo.ai, including a **high-severity authorization flaw** that allowed any authenticated user to join another team's non-draft project and immediately gain edit control.
+
 A responsible disclosure security review of the megademo.ai hackathon platform.
+
+## Quick Stats
+
+| Metric | Value |
+| --- | --- |
+| Findings validated | **4 vulnerabilities** |
+| Severity mix | **1 High · 2 Medium · 1 Low** |
+| Most impressive finding | **Project takeover via unauthorized self-join** |
+| Testing approach | **Authenticated penetration testing + source code review** |
+| Positive control verified | **Admin privilege escalation was not possible** |
+
+## Findings at a Glance
+
+| Severity | Finding | Why it matters |
+| --- | --- | --- |
+| 🔴 **High** | **Project Takeover via Self-Join** | Any authenticated user could join another team's non-draft project and immediately gain full edit rights. |
+| 🟡 **Medium** | **Session Fixation** | Login did not rotate the session ID, enabling session hijacking if an attacker could plant a known cookie first. |
+| 🟡 **Medium** | **Test Login Token in URL** | A production test-login endpoint accepted secrets in a GET URL, increasing exposure through logs, history, and intermediaries. |
+| 🟢 **Low** | **Self-Voting Allowed** | Project owners and team members could rate their own submissions, undermining judging integrity. |
+| 🔵 **Info** | **Admin Escalation Not Possible** | Server-side role checks on `/admin` held up under testing and bypass attempts failed. |
 
 ## Executive Summary
 
@@ -17,7 +46,7 @@ Testing was performed using an authenticated user session with permission to ass
 - Administrative access controls
 - Input handling for project voting and project creation features
 
-The testing approach was manual and behavior-driven, using normal application requests and direct HTTP requests to verify authorization and session management behaviors.
+The testing approach was manual and behavior-driven, using normal application requests and direct HTTP requests to verify authorization and session management behaviors, supported by source review to confirm impact and likely root causes.
 
 ## Findings Summary
 
