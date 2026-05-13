@@ -11,6 +11,10 @@
 
 A responsible disclosure security review of the megademo.ai hackathon platform.
 
+## Proof-of-Concept Scripts
+
+A complete set of runnable Python PoC scripts for all 14 findings now lives in [`poc/`](poc/). They use only `requests` plus the standard library, accept the audit session cookie through `MEGADEMO_COOKIE`, and are intended only for authorized testing.
+
 ## Quick Stats
 
 | Metric | Value |
