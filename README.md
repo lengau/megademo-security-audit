@@ -1,26 +1,26 @@
 # megademo.ai Security Audit
 
 ![Scope](https://img.shields.io/badge/scope-authenticated%20pen--test%20%2B%20source%20review-0ea5e9?style=for-the-badge)
-![Findings](https://img.shields.io/badge/findings-14%20validated-111827?style=for-the-badge)
+![Findings](https://img.shields.io/badge/findings-15%20validated-111827?style=for-the-badge)
 ![High](https://img.shields.io/badge/high-3-dc2626?style=for-the-badge)
-![Medium](https://img.shields.io/badge/medium-6-f59e0b?style=for-the-badge)
+![Medium](https://img.shields.io/badge/medium-7-f59e0b?style=for-the-badge)
 ![Low](https://img.shields.io/badge/low-5-16a34a?style=for-the-badge)
 ![Status](https://img.shields.io/badge/disclosure-responsible-7c3aed?style=for-the-badge)
 
-> 🚨 **From a normal user account to full project takeover:** this expanded assessment identified **14 validated vulnerabilities and issues** in megademo.ai, including a **high-severity authorization flaw** that allowed any authenticated user to join another team's non-draft project and immediately gain edit control.
+> 🚨 **From a normal user account to full project takeover:** this expanded assessment identified **15 validated vulnerabilities and issues** in megademo.ai, including a **high-severity authorization flaw** that allowed any authenticated user to join another team's non-draft project and immediately gain edit control.
 
 A responsible disclosure security review of the megademo.ai hackathon platform.
 
 ## Proof-of-Concept Scripts
 
-A complete set of runnable Python PoC scripts for all 14 findings now lives in [`poc/`](poc/). They use only `requests` plus the standard library, accept the audit session cookie through `MEGADEMO_COOKIE`, and are intended only for authorized testing.
+A complete set of runnable Python PoC scripts for all 15 findings now lives in [`poc/`](poc/). They use only `requests` plus the standard library, accept the audit session cookie through `MEGADEMO_COOKIE`, and are intended only for authorized testing.
 
 ## Quick Stats
 
 | Metric | Value |
 | --- | --- |
-| Findings validated | **14 findings** |
-| Severity mix | **3 High · 6 Medium · 5 Low** |
+| Findings validated | **15 findings** |
+| Severity mix | **3 High · 7 Medium · 5 Low** |
 | Most impressive finding | **Project takeover via unauthorized self-join** |
 | Testing approach | **Authenticated penetration testing + source code review** |
 | Positive control verified | **Admin privilege escalation was not possible** |
@@ -43,6 +43,7 @@ A complete set of runnable Python PoC scripts for all 14 findings now lives in [
 | 🟢 **Low** | **GitHub API Refresh Triggered on Every Project View** | Normal browsing triggered unnecessary outbound GitHub refreshes, increasing rate-limit pressure. |
 | 🟢 **Low** | **Orphaned Logo Files on Replace/Delete** | Replaced and deleted project logos were left behind in storage, causing an avoidable storage leak. |
 | 🔴 **High** | **Vulnerable npm Dependencies** | Several direct and transitive packages were behind known security advisories and should be upgraded. |
+| 🟡 **Medium** | **Forced Team Membership Without Consent** | Project owners could add any registered user to their team without invitation or acceptance, enabling reputation manipulation. |
 | 🔵 **Info** | **Admin Escalation Not Possible** | Server-side role checks on `/admin` held up under testing and bypass attempts failed. |
 
 ## Executive Summary
@@ -82,6 +83,7 @@ The testing approach was manual and behavior-driven, using normal application re
 | LOW | GitHub API Refresh Triggered on Every Project View | Viewing a project triggers outbound GitHub API refresh logic during normal browsing. | Load a project detail page repeatedly and observe repository refresh calls being initiated from the view path. | Move refreshes to a background job and add per-project throttling. |
 | LOW | Orphaned Logo Files on Replace/Delete | Replacing project logos or deleting projects leaves prior logo files behind in storage. | Replace a logo or delete a project, then inspect storage and observe that the old logo file remains. | Delete superseded logo files during replace, remove, and project-delete flows. |
 | HIGH | Vulnerable npm Dependencies | The project includes vulnerable versions of `axios`, `fast-xml-builder`, and moderate-risk `express-rate-limit` / `ip-address` dependency paths. | Review `package.json` / lockfile entries or run dependency audit tooling and observe reported advisories for the listed packages. | Upgrade direct and transitive dependencies to patched versions and re-run audit checks. |
+| MEDIUM | Forced Team Membership Without Consent | Project owners can add any registered user to their team via `POST /projects/:id/team` with no invitation or acceptance flow. | Search for a user's email via `/api/users/search`, then POST their email to `/projects/:id/team` and observe them added without consent. | Implement an invitation/acceptance flow requiring explicit consent before listing someone as a team member. |
 | INFO | Admin Escalation Not Possible (good) | Admin middleware checks the database-stored role on each request; `/admin` routes return 403 for non-admins, and tested bypasses failed. | Attempt admin access as a non-admin via parameter pollution, cookie tampering, and OIDC role selection; observe 403 responses or ignored input. | Maintain the current authorization model and continue validating admin checks against the persisted server-side role. |
 
 ## Findings
@@ -440,6 +442,31 @@ Upgrade direct and transitive dependencies to patched versions and re-run audit 
 
 ---
 
+### MEDIUM - Forced Team Membership Without Consent
+
+**Location:** `controllers/project.js:713-730`
+
+**Description**
+
+Project owners can add any registered user to their project team by POSTing their email to `/projects/:id/team`. There is no invitation flow, acceptance step, or notification to the target user. Combined with the user enumeration endpoint (finding #5), an attacker can discover anyone's email and immediately force them onto a project.
+
+**Impact**
+
+Reputation and attribution manipulation. A malicious project owner could list respected engineers as "team members" to imply endorsement or involvement in their project. The victim has no way to know they've been added unless they check the project page directly.
+
+**Reproduction Steps**
+
+1. Authenticate as any user who owns a project.
+2. Use `GET /api/users/search?q=<name>` to find the target's email.
+3. `POST /projects/:id/team` with `{"addEmail": "victim@canonical.com"}` and CSRF token.
+4. Observe the target is now listed as a team member without any consent.
+
+**Recommendation**
+
+Implement an invitation/acceptance flow: the target user should receive a notification and must explicitly accept before being listed as a team member.
+
+---
+
 ### INFO - Admin Escalation Not Possible (good)
 
 **Tested behavior:** Non-admin users cannot reach `/admin` functionality through common bypass attempts.
@@ -465,7 +492,7 @@ Preserve the current server-side role enforcement approach and continue validati
 
 ## Conclusion and Recommendations
 
-megademo.ai would benefit from immediate remediation of the **project self-join takeover issue**, the **plaintext secret exposure on the admin dashboard**, and the **vulnerable dependency set**, as these create the clearest high-impact risk. The **session fixation**, **authenticated user enumeration**, **markdown image beacon**, **missing server-side validation**, and **browse-page pagination** issues should also be prioritized because they affect authentication security, privacy, data quality, and platform reliability. The remaining low-severity issues still merit cleanup to improve correctness and operational hygiene.
+megademo.ai would benefit from immediate remediation of the **project self-join takeover issue**, the **plaintext secret exposure on the admin dashboard**, and the **vulnerable dependency set**, as these create the clearest high-impact risk. The **session fixation**, **authenticated user enumeration**, **forced team membership**, **markdown image beacon**, **missing server-side validation**, and **browse-page pagination** issues should also be prioritized because they affect authentication security, privacy, consent, data quality, and platform reliability. The remaining low-severity issues still merit cleanup to improve correctness and operational hygiene.
 
 Priority recommendations:
 
